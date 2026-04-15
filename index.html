@@ -70,8 +70,12 @@
     <section class="card habits-card" aria-label="Habits">
       <div class="card-head">
         <span class="card-title">Habits</span>
-        <button class="chip-btn" id="addHabit">+ Add</button>
+        <span class="muted small" id="habitCount">0</span>
       </div>
+      <form id="habitForm" class="input-row">
+        <input id="habitInput" type="text" placeholder="New habit…" autocomplete="off" />
+        <button class="primary-btn" type="submit" aria-label="Add habit">+</button>
+      </form>
       <ul id="habitList" class="habit-list"></ul>
     </section>
 
