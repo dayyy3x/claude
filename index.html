@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#0b1020" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Dashboard" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="description" content="Personal mobile dashboard" />
+  <title>Dashboard</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="hello">
+      <span id="greeting">Hello</span>
+      <strong id="userName" contenteditable="true" spellcheck="false" aria-label="Your name">friend</strong>
+    </div>
+    <button id="themeToggle" class="icon-btn" aria-label="Toggle theme" title="Toggle theme">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
+    </button>
+  </header>
+
+  <main class="grid">
+    <section class="card clock-card" aria-label="Clock">
+      <div class="clock" id="clock">--:--</div>
+      <div class="date" id="date">—</div>
+    </section>
+
+    <section class="card weather-card" aria-label="Weather">
+      <div class="card-head">
+        <span class="card-title">Weather</span>
+        <button id="refreshWeather" class="chip-btn" aria-label="Refresh weather">Refresh</button>
+      </div>
+      <div class="weather-body">
+        <div class="weather-icon" id="weatherIcon">☀️</div>
+        <div class="weather-text">
+          <div class="temp" id="temp">—</div>
+          <div class="muted" id="weatherDesc">Tap refresh to load</div>
+          <div class="muted small" id="weatherLoc">Location unknown</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card stats-card" aria-label="Stats">
+      <div class="card-head">
+        <span class="card-title">Stats</span>
+        <button class="chip-btn" id="editStats">Edit</button>
+      </div>
+      <div class="stats-grid" id="statsGrid"></div>
+    </section>
+
+    <section class="card todo-card" aria-label="Todos">
+      <div class="card-head">
+        <span class="card-title">Today's Tasks</span>
+        <span class="muted small" id="todoCount">0 / 0</span>
+      </div>
+      <form id="todoForm" class="input-row">
+        <input id="todoInput" type="text" placeholder="Add a task…" autocomplete="off" />
+        <button class="primary-btn" type="submit" aria-label="Add task">+</button>
+      </form>
+      <ul id="todoList" class="todo-list"></ul>
+    </section>
+
+    <section class="card habits-card" aria-label="Habits">
+      <div class="card-head">
+        <span class="card-title">Habits</span>
+        <button class="chip-btn" id="addHabit">+ Add</button>
+      </div>
+      <ul id="habitList" class="habit-list"></ul>
+    </section>
+
+    <section class="card notes-card" aria-label="Notes">
+      <div class="card-head">
+        <span class="card-title">Quick Notes</span>
+        <span class="muted small" id="notesSaved">Saved</span>
+      </div>
+      <textarea id="notes" placeholder="Jot something down…"></textarea>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span class="muted small">Tap name to edit · Everything saves on your device</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
