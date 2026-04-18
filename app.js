@@ -260,7 +260,9 @@
 
   // ---------- Habits (daily streaks) ----------
   const habitList = document.getElementById('habitList');
-  const addHabitBtn = document.getElementById('addHabit');
+  const habitForm = document.getElementById('habitForm');
+  const habitInput = document.getElementById('habitInput');
+  const habitCount = document.getElementById('habitCount');
   let habits = load(K.habits, [
     { id: uid(), name: 'Drink water', history: [] },
     { id: uid(), name: 'Move 30 min', history: [] },
@@ -281,10 +283,11 @@
 
   const renderHabits = () => {
     habitList.innerHTML = '';
+    habitCount.textContent = String(habits.length);
     if (habits.length === 0) {
       const empty = document.createElement('li');
       empty.className = 'empty';
-      empty.textContent = 'No habits yet. Tap + Add to start tracking.';
+      empty.textContent = 'No habits yet. Add one above ↑';
       habitList.appendChild(empty);
       return;
     }
@@ -311,20 +314,20 @@
         renderHabits();
       });
       li.querySelector('.delete-btn').addEventListener('click', () => {
-        if (confirm(`Delete habit "${h.name}"?`)) {
-          habits = habits.filter((x) => x.id !== h.id);
-          save(K.habits, habits);
-          renderHabits();
-        }
+        habits = habits.filter((x) => x.id !== h.id);
+        save(K.habits, habits);
+        renderHabits();
       });
       habitList.appendChild(li);
     });
   };
-  addHabitBtn.addEventListener('click', () => {
-    const name = prompt('New habit name:');
+  habitForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = habitInput.value.trim();
     if (!name) return;
-    habits.push({ id: uid(), name: name.trim(), history: [] });
+    habits.push({ id: uid(), name, history: [] });
     save(K.habits, habits);
+    habitInput.value = '';
     renderHabits();
   });
   renderHabits();
