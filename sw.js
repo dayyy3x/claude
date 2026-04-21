@@ -1,5 +1,5 @@
-/* Simple offline cache for the dashboard shell */
-const CACHE = 'dashboard-v1';
+/* Offline cache for the grade tracker shell */
+const CACHE = 'grades-v1';
 const ASSETS = [
   './',
   './index.html',
@@ -32,22 +32,15 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
-  // Never cache weather/geocoding API; always go to network
-  if (url.hostname.endsWith('open-meteo.com')) {
-    e.respondWith(fetch(req).catch(() => new Response('', { status: 504 })));
-    return;
-  }
+  if (url.origin !== self.location.origin) return;
 
-  // Cache-first for same-origin shell assets; network fallback for everything else
-  if (url.origin === self.location.origin) {
-    e.respondWith(
-      caches.match(req).then((cached) =>
-        cached || fetch(req).then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
-          return res;
-        }).catch(() => cached)
-      )
-    );
-  }
+  e.respondWith(
+    caches.match(req).then((cached) =>
+      cached || fetch(req).then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+        return res;
+      }).catch(() => cached)
+    )
+  );
 });

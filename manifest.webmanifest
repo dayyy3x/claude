@@ -1,7 +1,7 @@
 {
-  "name": "Dashboard",
-  "short_name": "Dashboard",
-  "description": "Personal mobile dashboard",
+  "name": "Grades",
+  "short_name": "Grades",
+  "description": "Mobile grade tracker with final exam calculator",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
