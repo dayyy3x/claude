@@ -34,7 +34,7 @@
     <section class="card banner-card" aria-label="Tailscale status">
       <div class="banner-row">
         <div class="banner-dot"></div>
-        <div>
+        <div class="banner-text">
           <div class="banner-title">Tailscale required</div>
           <div class="muted small">Turn the Tailscale VPN on before connecting.</div>
         </div>
@@ -48,6 +48,19 @@
       <button class="primary-btn" type="submit" aria-label="Add device">+</button>
     </form>
 
+    <section class="card data-card" aria-label="Backup">
+      <div class="card-head">
+        <span class="card-title">Backup</span>
+      </div>
+      <div class="data-row">
+        <button class="chip-btn" id="exportBtn">Export to clipboard</button>
+        <button class="chip-btn" id="importBtn">Import from clipboard</button>
+      </div>
+      <p class="muted small hint">
+        Exports your devices + saved commands as JSON. Paste into this phone (or any other) to restore.
+      </p>
+    </section>
+
     <p class="muted small footnote">
       All devices saved locally on this phone. No accounts, nothing synced.
     </p>
@@ -56,7 +69,13 @@
   <!-- ============ DETAIL: device view ============ -->
   <main id="deviceView" class="view hidden">
     <section class="card device-header-card">
-      <input id="dName" class="device-name-input" type="text" placeholder="Device name" />
+      <div class="header-top">
+        <button id="iconBtn" class="icon-picker" aria-label="Change icon">
+          <span id="iconCurrent">🖥</span>
+        </button>
+        <input id="dName" class="device-name-input" type="text" placeholder="Device name" />
+      </div>
+      <div id="iconPicker" class="icon-picker-panel hidden" role="listbox"></div>
       <input id="dHost" class="device-host-input" type="text" placeholder="hostname.tailnet.ts.net" autocapitalize="off" autocorrect="off" spellcheck="false" />
       <div class="device-grade-row">
         <div class="status-chip" id="statusChip"><span class="status-dot"></span><span>Ready</span></div>

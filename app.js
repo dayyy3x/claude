@@ -13,22 +13,34 @@
 
   // ---------- Theme ----------
   const themeToggle = document.getElementById('themeToggle');
+  const systemPrefersDark = () =>
+    window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   const applyTheme = (t) => {
     document.documentElement.setAttribute('data-theme', t);
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', t === 'light' ? '#f4f6fb' : '#0b1020');
   };
-  let theme = load(K.theme, 'dark');
+  // If the user has never picked a theme, follow the system preference.
+  let storedTheme = load(K.theme, null);
+  let theme = storedTheme || (systemPrefersDark() ? 'dark' : 'light');
   applyTheme(theme);
+  if (!storedTheme && window.matchMedia) {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', (e) => {
+      if (load(K.theme, null)) return;
+      theme = e.matches ? 'dark' : 'light';
+      applyTheme(theme);
+    });
+  }
   themeToggle.addEventListener('click', () => {
     theme = theme === 'dark' ? 'light' : 'dark';
     applyTheme(theme); save(K.theme, theme);
   });
 
   // ---------- Model ----------
-  // Device: { id, name, host, user, sshPort, rdpPort, webPort, notes,
-  //           commands: [{ id, name, body }] }
+  // Device: { id, icon, name, host, user, sshPort, rdpPort, webPort, notes,
+  //           lastUsedAt, commands: [{ id, name, body }] }
   const DEFAULT_DEVICE = {
+    icon: '🖥',
     name: 'Desktop',
     host: 'desktop-8r8o6du.tail82cb28.ts.net',
     user: '',
@@ -36,15 +48,28 @@
     rdpPort: 3389,
     webPort: 80,
     notes: '',
+    lastUsedAt: 0,
     commands: [],
   };
+
+  const ICONS = ['🖥', '💻', '📱', '🖲', '🏠', '🧰', '📡', '🎮', '🎬', '📦', '🔒', '🧪'];
 
   let devices = load(K.devices, null);
   if (!Array.isArray(devices)) {
     devices = [{ id: uid(), ...DEFAULT_DEVICE }];
     save(K.devices, devices);
   }
+  // Backfill any missing fields on pre-v2 data
+  devices.forEach(d => {
+    if (!d.icon) d.icon = '🖥';
+    if (typeof d.lastUsedAt !== 'number') d.lastUsedAt = 0;
+    if (!Array.isArray(d.commands)) d.commands = [];
+  });
   const persist = () => save(K.devices, devices);
+
+  // Derived: sorted view (most recently launched first; untouched keep insertion order)
+  const sortedDevices = () =>
+    [...devices].sort((a, b) => (b.lastUsedAt || 0) - (a.lastUsedAt || 0));
 
   // ---------- Views ----------
   const homeView = document.getElementById('homeView');
@@ -66,6 +91,7 @@
     appSubtitle.textContent = devices.length
       ? 'Tap a device to connect'
       : 'Add a device below to get started';
+    hideIconPicker();
     renderHome();
   };
 
@@ -77,8 +103,9 @@
     homeView.classList.add('hidden');
     deviceView.classList.remove('hidden');
     backBtn.classList.remove('hidden');
-    appTitle.textContent = d.name || d.host || 'Device';
+    appTitle.textContent = d.name || (d.host ? d.host.split('.')[0] : 'Device');
     appSubtitle.textContent = d.host || '';
+    hideIconPicker();
     renderDevice();
   };
 
@@ -100,26 +127,57 @@
       empty.className = 'empty-card card';
       empty.innerHTML = `
         <div class="empty-title">No devices yet</div>
-        <div class="muted small">Add the Tailscale hostname of a device (like <code>my-pc.tailXXXX.ts.net</code>) to get one-tap SSH / RDP shortcuts.</div>
+        <div class="muted small">Paste a Tailscale hostname below to add your first device (like <code>my-pc.tailXXXX.ts.net</code>). You'll get one-tap SSH, RDP, and web shortcuts.</div>
       `;
       deviceListEl.appendChild(empty);
       return;
     }
 
-    devices.forEach(d => {
+    sortedDevices().forEach(d => {
       const li = document.createElement('li');
       li.className = 'device-card card';
       const shortHost = d.host ? d.host.split('.')[0] : '—';
+      const user = (d.user || '').trim();
+      const sshTarget = `${user ? user + '@' : ''}${d.host || ''}${(+d.sshPort || 22) !== 22 ? ':' + d.sshPort : ''}`;
       li.innerHTML = `
-        <div class="device-main">
-          <div class="device-name">${escapeHtml(deviceDisplayName(d))}</div>
-          <div class="device-host muted small">${escapeHtml(d.host || 'no hostname set')}</div>
-        </div>
-        <div class="device-side">
-          <div class="device-badge">${escapeHtml(shortHost)}</div>
+        <button class="card-tap" aria-label="Open device details">
+          <div class="device-avatar">${escapeHtml(d.icon || '🖥')}</div>
+          <div class="device-main">
+            <div class="device-name">${escapeHtml(deviceDisplayName(d))}</div>
+            <div class="device-host muted small">${escapeHtml(d.host || 'no hostname set')}</div>
+          </div>
+          <div class="chev" aria-hidden="true">›</div>
+        </button>
+        <div class="quick-actions">
+          <button class="quick-btn ssh" data-act="ssh">
+            <span class="quick-icon">⌨</span>
+            <span class="quick-text">
+              <span class="quick-label">SSH</span>
+              <span class="quick-sub">${escapeHtml(sshTarget || shortHost)}</span>
+            </span>
+          </button>
+          <button class="quick-btn rdp" data-act="rdp">
+            <span class="quick-icon">🖥</span>
+            <span class="quick-text">
+              <span class="quick-label">RDP</span>
+              <span class="quick-sub">${escapeHtml(shortHost)}</span>
+            </span>
+          </button>
+          <button class="quick-btn copy" data-act="copy" aria-label="Copy ssh command">
+            <span class="quick-icon">⎘</span>
+          </button>
         </div>
       `;
-      li.addEventListener('click', () => showDevice(d.id));
+      li.querySelector('.card-tap').addEventListener('click', () => showDevice(d.id));
+      li.querySelectorAll('.quick-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const act = btn.dataset.act;
+          if (act === 'ssh') doSsh(d);
+          else if (act === 'rdp') doRdp(d);
+          else if (act === 'copy') doCopy(d);
+        });
+      });
       deviceListEl.appendChild(li);
     });
   };
@@ -131,6 +189,7 @@
     const host = raw.replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
     const d = {
       id: uid(),
+      icon: '🖥',
       name: host.split('.')[0] || 'Device',
       host,
       user: '',
@@ -138,6 +197,7 @@
       rdpPort: 3389,
       webPort: 80,
       notes: '',
+      lastUsedAt: 0,
       commands: [],
     };
     devices.push(d);
@@ -168,6 +228,9 @@
   const addCmdForm = document.getElementById('addCmdForm');
   const cmdName = document.getElementById('cmdName');
   const cmdBody = document.getElementById('cmdBody');
+  const iconBtn = document.getElementById('iconBtn');
+  const iconCurrent = document.getElementById('iconCurrent');
+  const iconPicker = document.getElementById('iconPicker');
 
   const renderDevice = () => {
     const d = current();
@@ -179,8 +242,10 @@
     dRdpPort.value = d.rdpPort ?? '';
     dWebPort.value = d.webPort ?? '';
     dNotes.value = d.notes || '';
+    iconCurrent.textContent = d.icon || '🖥';
     renderSubs();
     renderCommands();
+    renderIconPicker();
   };
 
   const renderSubs = () => {
@@ -195,6 +260,37 @@
     copySub.textContent = host ? `ssh ${user ? user + '@' : ''}${host}` : 'set hostname';
     webSub.textContent = host ? `http://${host}${webPort !== 80 ? ':' + webPort : ''}` : 'set hostname';
   };
+
+  const renderIconPicker = () => {
+    const d = current(); if (!d) return;
+    iconPicker.innerHTML = '';
+    ICONS.forEach(ic => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'icon-swatch' + (d.icon === ic ? ' selected' : '');
+      b.textContent = ic;
+      b.setAttribute('role', 'option');
+      b.setAttribute('aria-selected', d.icon === ic ? 'true' : 'false');
+      b.addEventListener('click', () => {
+        d.icon = ic;
+        persist();
+        iconCurrent.textContent = ic;
+        renderIconPicker();
+        hideIconPicker();
+      });
+      iconPicker.appendChild(b);
+    });
+  };
+  const hideIconPicker = () => iconPicker.classList.add('hidden');
+  iconBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    iconPicker.classList.toggle('hidden');
+  });
+  document.addEventListener('click', (e) => {
+    if (iconPicker.classList.contains('hidden')) return;
+    if (e.target.closest('#iconPicker') || e.target.closest('#iconBtn')) return;
+    hideIconPicker();
+  });
 
   const bindField = (el, key, coerce = (v) => v) => {
     el.addEventListener('input', () => {
@@ -226,54 +322,60 @@
     showHome();
   });
 
-  // ---------- Launch actions ----------
+  // ---------- Launch actions (shared between home cards and detail view) ----------
+  const touchLastUsed = (d) => {
+    d.lastUsedAt = Date.now();
+    persist();
+  };
   const missingHost = (d) => {
     if (!d.host) { toast('Set a hostname first'); return true; }
     return false;
   };
 
-  sshBtn.addEventListener('click', () => {
-    const d = current(); if (!d || missingHost(d)) return;
+  const doSsh = (d) => {
+    if (missingHost(d)) return;
     const user = (d.user || '').trim();
     const port = +d.sshPort || 22;
-    // Termius and Blink both register ssh:// — send user, host, and port.
     const url = `ssh://${user ? encodeURIComponent(user) + '@' : ''}${d.host}${port !== 22 ? ':' + port : ''}`;
+    touchLastUsed(d);
     launchScheme(url, 'SSH app');
-  });
+  };
 
-  rdpBtn.addEventListener('click', () => {
-    const d = current(); if (!d || missingHost(d)) return;
+  const doRdp = (d) => {
+    if (missingHost(d)) return;
     const port = +d.rdpPort || 3389;
     const user = (d.user || '').trim();
-    // Microsoft Remote Desktop (iOS/Android) supports rdp:// URLs with
-    // .rdp-style key=value fields, URL-encoded.
-    const parts = [
-      `full%20address=s:${encodeURIComponent(d.host + ':' + port)}`,
-    ];
+    const parts = [`full%20address=s:${encodeURIComponent(d.host + ':' + port)}`];
     if (user) parts.push(`username=s:${encodeURIComponent(user)}`);
     const url = `rdp://${parts.join('&')}`;
+    touchLastUsed(d);
     launchScheme(url, 'Remote Desktop');
-  });
+  };
 
-  copyBtn.addEventListener('click', async () => {
-    const d = current(); if (!d || missingHost(d)) return;
+  const doCopy = async (d) => {
+    if (missingHost(d)) return;
     const user = (d.user || '').trim();
     const port = +d.sshPort || 22;
     const cmd = `ssh ${user ? user + '@' : ''}${d.host}${port !== 22 ? ' -p ' + port : ''}`;
     await copyToClipboard(cmd);
+    touchLastUsed(d);
     toast('Copied: ' + cmd);
-  });
+  };
 
-  webBtn.addEventListener('click', () => {
-    const d = current(); if (!d || missingHost(d)) return;
+  const doWeb = (d) => {
+    if (missingHost(d)) return;
     const port = +d.webPort || 80;
     const url = `http://${d.host}${port !== 80 ? ':' + port : ''}/`;
+    touchLastUsed(d);
     window.open(url, '_blank', 'noopener');
-  });
+  };
+
+  sshBtn.addEventListener('click', () => { const d = current(); if (d) doSsh(d); });
+  rdpBtn.addEventListener('click', () => { const d = current(); if (d) doRdp(d); });
+  copyBtn.addEventListener('click', () => { const d = current(); if (d) doCopy(d); });
+  webBtn.addEventListener('click', () => { const d = current(); if (d) doWeb(d); });
 
   const launchScheme = (url, label) => {
-    // Track whether we end up backgrounded. If the scheme resolves, iOS/Android
-    // hands off to the app and we lose focus. Otherwise, show a tip.
     let left = false;
     const onHide = () => { left = true; };
     document.addEventListener('visibilitychange', onHide, { once: true });
@@ -290,7 +392,6 @@
     try {
       await navigator.clipboard.writeText(text);
     } catch {
-      // Fallback for older browsers / non-HTTPS contexts
       const ta = document.createElement('textarea');
       ta.value = text;
       ta.style.position = 'fixed';
@@ -300,6 +401,11 @@
       try { document.execCommand('copy'); } catch {}
       document.body.removeChild(ta);
     }
+  };
+
+  const readFromClipboard = async () => {
+    try { return await navigator.clipboard.readText(); }
+    catch { return null; }
   };
 
   // ---------- Saved commands ----------
@@ -349,6 +455,38 @@
     persist();
     cmdName.value = ''; cmdBody.value = '';
     renderCommands();
+  });
+
+  // ---------- Backup (export / import) ----------
+  document.getElementById('exportBtn').addEventListener('click', async () => {
+    const blob = { version: 2, exportedAt: new Date().toISOString(), devices };
+    await copyToClipboard(JSON.stringify(blob, null, 2));
+    toast(`Exported ${devices.length} device${devices.length === 1 ? '' : 's'} to clipboard`);
+  });
+  document.getElementById('importBtn').addEventListener('click', async () => {
+    const text = await readFromClipboard();
+    if (!text) { toast('Could not read clipboard'); return; }
+    let parsed;
+    try { parsed = JSON.parse(text); } catch { toast('Clipboard is not JSON'); return; }
+    const incoming = Array.isArray(parsed) ? parsed : parsed?.devices;
+    if (!Array.isArray(incoming)) { toast('No devices array in clipboard'); return; }
+    if (!confirm(`Replace your ${devices.length} device${devices.length === 1 ? '' : 's'} with ${incoming.length} from clipboard?`)) return;
+    devices = incoming.map(d => ({
+      id: d.id || uid(),
+      icon: d.icon || '🖥',
+      name: d.name || '',
+      host: d.host || '',
+      user: d.user || '',
+      sshPort: d.sshPort ?? 22,
+      rdpPort: d.rdpPort ?? 3389,
+      webPort: d.webPort ?? 80,
+      notes: d.notes || '',
+      lastUsedAt: typeof d.lastUsedAt === 'number' ? d.lastUsedAt : 0,
+      commands: Array.isArray(d.commands) ? d.commands : [],
+    }));
+    persist();
+    toast(`Imported ${devices.length} device${devices.length === 1 ? '' : 's'}`);
+    showHome();
   });
 
   // ---------- Toast ----------
