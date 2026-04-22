@@ -198,6 +198,7 @@
           <span class="device-main">
             <span class="device-name">${escapeHtml(deviceDisplayName(d))}</span>
             <span class="device-host">${escapeHtml(d.host || 'no hostname set')}</span>
+            ${d.lastUsedAt ? `<span class="device-meta">Last used ${escapeHtml(timeAgo(d.lastUsedAt))}</span>` : ''}
           </span>
           <span class="chev">
             <svg class="svg-icon"><use href="#i-chev"/></svg>
@@ -649,13 +650,64 @@
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[c]));
   }
+  function timeAgo(ts) {
+    if (!ts) return '';
+    const d = Date.now() - ts;
+    if (d < 30_000) return 'just now';
+    if (d < 3_600_000) return Math.floor(d / 60_000) + 'm ago';
+    if (d < 86_400_000) return Math.floor(d / 3_600_000) + 'h ago';
+    if (d < 7 * 86_400_000) return Math.floor(d / 86_400_000) + 'd ago';
+    return new Date(ts).toLocaleDateString();
+  }
+
+  // ---------- Shortcut-link chips (device detail) ----------
+  // Generates a deep-link URL that the user can stick in iOS Shortcuts.
+  document.querySelectorAll('[data-link]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const d = current(); if (!d) return;
+      haptic(10);
+      const action = btn.dataset.link;
+      const url = `${location.origin}${location.pathname}?go=${action}&id=${encodeURIComponent(d.id)}`;
+      await copyToClipboard(url);
+      toast('Link copied — paste into iOS Shortcuts');
+    });
+  });
+
+  // ---------- Deep links (?go=<action>&id=<id>) ----------
+  // Runs an action automatically on load, then clears the query so a
+  // reload doesn't re-fire. Intended for iOS Shortcuts / home-screen shortcuts.
+  const runDeepLink = () => {
+    const p = new URLSearchParams(location.search);
+    const action = p.get('go');
+    const id = p.get('id');
+    if (!action || !id) return false;
+    const d = devices.find(x => x.id === id);
+    if (!d) { toast('Device not found'); }
+    else {
+      switch (action) {
+        case 'ssh':  doSsh(d);  break;
+        case 'rdp':  doRdp(d);  break;
+        case 'copy': doCopy(d); break;
+        case 'web':  doWeb(d);  break;
+        default:     toast('Unknown action: ' + action); break;
+      }
+    }
+    // Clean the URL so reloads don't re-trigger
+    history.replaceState({ page: 'home' }, '', location.pathname);
+    return true;
+  };
 
   // ---------- Boot ----------
+  // Deep-link first: if ?go=<action>&id=<id> is present, render home and run it.
+  const hadDeepLink = runDeepLink();
+
   // Initial state: derive from location.hash if present, else last-visited.
   const hashId = location.hash ? location.hash.slice(1) : '';
-  const bootId = (hashId && devices.some(d => d.id === hashId))
-    ? hashId
-    : ((id) => id && devices.some(d => d.id === id) ? id : null)(load(K.lastDevice, null));
+  const bootId = hadDeepLink
+    ? null
+    : (hashId && devices.some(d => d.id === hashId))
+      ? hashId
+      : ((id) => id && devices.some(d => d.id === id) ? id : null)(load(K.lastDevice, null));
 
   if (bootId) {
     // Render home first (without transition), then show device without animation.
