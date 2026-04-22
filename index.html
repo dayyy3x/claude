@@ -6,10 +6,10 @@
   <meta name="theme-color" content="#0b1020" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Grades" />
+  <meta name="apple-mobile-web-app-title" content="Remote" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="description" content="Mobile grade tracker with final exam calculator" />
-  <title>Grades</title>
+  <meta name="description" content="Mobile remote-access launcher for your Tailscale devices" />
+  <title>Remote</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
@@ -21,96 +21,120 @@
       <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4L10.8 12z"/></svg>
     </button>
     <div class="title-block">
-      <div class="app-title" id="appTitle">Grades</div>
-      <div class="muted small" id="appSubtitle">Tap a class to edit · finals ready</div>
+      <div class="app-title" id="appTitle">Remote</div>
+      <div class="muted small" id="appSubtitle">Tap a device to connect</div>
     </div>
     <button id="themeToggle" class="icon-btn" aria-label="Toggle theme" title="Toggle theme">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
     </button>
   </header>
 
-  <!-- ============ HOME: course list ============ -->
+  <!-- ============ HOME: device list ============ -->
   <main id="homeView" class="view">
-    <section class="card summary-card" aria-label="Overall summary">
-      <div class="summary-row">
-        <div class="summary-stat">
-          <div class="summary-value" id="overallAvg">—</div>
-          <div class="summary-label">Overall average</div>
-        </div>
-        <div class="summary-stat">
-          <div class="summary-value" id="overallGpa">—</div>
-          <div class="summary-label">GPA (4.0)</div>
-        </div>
-        <div class="summary-stat">
-          <div class="summary-value" id="courseCount">0</div>
-          <div class="summary-label">Classes</div>
+    <section class="card banner-card" aria-label="Tailscale status">
+      <div class="banner-row">
+        <div class="banner-dot"></div>
+        <div>
+          <div class="banner-title">Tailscale required</div>
+          <div class="muted small">Turn the Tailscale VPN on before connecting.</div>
         </div>
       </div>
     </section>
 
-    <ul id="courseList" class="course-list" aria-label="Courses"></ul>
+    <ul id="deviceList" class="device-list" aria-label="Devices"></ul>
 
-    <form id="addCourseForm" class="input-row add-course">
-      <input id="addCourseInput" type="text" placeholder="Add a class (e.g. Calc II)…" autocomplete="off" />
-      <button class="primary-btn" type="submit" aria-label="Add class">+</button>
+    <form id="addDeviceForm" class="input-row add-device">
+      <input id="addDeviceInput" type="text" placeholder="Add device (Tailscale hostname)…" autocomplete="off" autocapitalize="off" autocorrect="off" />
+      <button class="primary-btn" type="submit" aria-label="Add device">+</button>
     </form>
 
     <p class="muted small footnote">
-      Everything saves on this device. No account, no cloud.
+      All devices saved locally on this phone. No accounts, nothing synced.
     </p>
   </main>
 
-  <!-- ============ DETAIL: single course ============ -->
-  <main id="courseView" class="view hidden">
-    <section class="card course-header-card">
-      <input id="courseName" class="course-name-input" type="text" placeholder="Class name" />
-      <div class="course-grade-row">
-        <div>
-          <div class="course-grade-value" id="currentGrade">—</div>
-          <div class="muted small">Current grade <span id="currentLetter" class="letter-pill"></span></div>
-        </div>
-        <button id="deleteCourseBtn" class="chip-btn danger">Delete class</button>
+  <!-- ============ DETAIL: device view ============ -->
+  <main id="deviceView" class="view hidden">
+    <section class="card device-header-card">
+      <input id="dName" class="device-name-input" type="text" placeholder="Device name" />
+      <input id="dHost" class="device-host-input" type="text" placeholder="hostname.tailnet.ts.net" autocapitalize="off" autocorrect="off" spellcheck="false" />
+      <div class="device-grade-row">
+        <div class="status-chip" id="statusChip"><span class="status-dot"></span><span>Ready</span></div>
+        <button id="deleteDeviceBtn" class="chip-btn danger">Delete</button>
       </div>
     </section>
 
-    <section class="card" aria-label="Final exam calculator">
-      <div class="card-head">
-        <span class="card-title">Final exam calculator</span>
+    <section class="card" aria-label="Quick actions">
+      <div class="card-head"><span class="card-title">Connect</span></div>
+      <div class="action-grid">
+        <button class="action-btn ssh-btn" id="sshBtn">
+          <div class="action-icon">⌨</div>
+          <div class="action-label">SSH</div>
+          <div class="action-sub" id="sshSub">—</div>
+        </button>
+        <button class="action-btn rdp-btn" id="rdpBtn">
+          <div class="action-icon">🖥</div>
+          <div class="action-label">RDP</div>
+          <div class="action-sub" id="rdpSub">—</div>
+        </button>
+        <button class="action-btn copy-btn" id="copyBtn">
+          <div class="action-icon">⎘</div>
+          <div class="action-label">Copy</div>
+          <div class="action-sub" id="copySub">ssh …</div>
+        </button>
+        <button class="action-btn web-btn" id="webBtn">
+          <div class="action-icon">🌐</div>
+          <div class="action-label">Web</div>
+          <div class="action-sub" id="webSub">http://…</div>
+        </button>
       </div>
-      <div class="final-grid">
-        <label class="field">
-          <span class="field-label">Final is worth</span>
-          <div class="field-input"><input id="finalWeight" type="number" inputmode="decimal" min="0" max="100" step="0.1" />%</div>
-        </label>
-        <label class="field">
-          <span class="field-label">Target grade</span>
-          <div class="field-input"><input id="targetGrade" type="number" inputmode="decimal" min="0" max="150" step="0.1" />%</div>
-        </label>
-      </div>
-      <div class="final-result" id="finalResult">
-        Set a final weight to see what you need.
-      </div>
-    </section>
-
-    <section class="card" aria-label="Assignments">
-      <div class="card-head">
-        <span class="card-title">Assignments</span>
-        <span class="muted small" id="weightSum">Weights: 0%</span>
-      </div>
-      <ul id="assignmentList" class="assignment-list"></ul>
-      <form id="addAssignmentForm" class="assignment-add">
-        <input id="aName" type="text" placeholder="Name (e.g. Midterm)" autocomplete="off" />
-        <input id="aEarned" type="number" inputmode="decimal" step="0.01" placeholder="Earned" />
-        <span class="slash">/</span>
-        <input id="aTotal" type="number" inputmode="decimal" step="0.01" placeholder="Total" />
-        <input id="aWeight" type="number" inputmode="decimal" step="0.1" min="0" max="100" placeholder="Weight %" />
-        <button class="primary-btn" type="submit" aria-label="Add assignment">+</button>
-      </form>
-      <p class="muted small hint">
-        Tip: weights should add to 100% minus the final weight. Leave weight blank to weight by points.
+      <p class="muted small hint" id="launchHint">
+        SSH uses Termius / Blink. RDP uses Microsoft Remote Desktop.
       </p>
     </section>
+
+    <section class="card" aria-label="Connection settings">
+      <div class="card-head"><span class="card-title">Settings</span></div>
+      <div class="settings-grid">
+        <label class="field">
+          <span class="field-label">Username</span>
+          <div class="field-input"><input id="dUser" type="text" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="username" /></div>
+        </label>
+        <label class="field">
+          <span class="field-label">SSH port</span>
+          <div class="field-input"><input id="dSshPort" type="number" inputmode="numeric" min="1" max="65535" placeholder="22" /></div>
+        </label>
+        <label class="field">
+          <span class="field-label">RDP port</span>
+          <div class="field-input"><input id="dRdpPort" type="number" inputmode="numeric" min="1" max="65535" placeholder="3389" /></div>
+        </label>
+        <label class="field">
+          <span class="field-label">Web port</span>
+          <div class="field-input"><input id="dWebPort" type="number" inputmode="numeric" min="1" max="65535" placeholder="80" /></div>
+        </label>
+      </div>
+      <label class="field notes-field">
+        <span class="field-label">Notes</span>
+        <textarea id="dNotes" placeholder="What lives on this box? Gotchas, credentials hints, etc."></textarea>
+      </label>
+    </section>
+
+    <section class="card" aria-label="Custom commands">
+      <div class="card-head">
+        <span class="card-title">Saved commands</span>
+        <span class="muted small" id="cmdCount">0</span>
+      </div>
+      <ul id="cmdList" class="cmd-list"></ul>
+      <form id="addCmdForm" class="cmd-add">
+        <input id="cmdName" type="text" placeholder="Label (e.g. restart plex)" autocapitalize="off" autocorrect="off" />
+        <input id="cmdBody" type="text" placeholder="shell command or URL" autocapitalize="off" autocorrect="off" spellcheck="false" />
+        <button class="primary-btn" type="submit" aria-label="Save command">+</button>
+      </form>
+      <p class="muted small hint">Tap a saved row to copy it to the clipboard.</p>
+    </section>
   </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="app.js"></script>
 </body>

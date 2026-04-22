@@ -1,7 +1,7 @@
 {
-  "name": "Grades",
-  "short_name": "Grades",
-  "description": "Mobile grade tracker with final exam calculator",
+  "name": "Remote",
+  "short_name": "Remote",
+  "description": "Mobile remote-access launcher for your Tailscale devices",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

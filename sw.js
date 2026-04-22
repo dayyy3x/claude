@@ -1,5 +1,5 @@
-/* Offline cache for the grade tracker shell */
-const CACHE = 'grades-v1';
+/* Offline cache for the remote-access launcher shell */
+const CACHE = 'remote-v1';
 const ASSETS = [
   './',
   './index.html',

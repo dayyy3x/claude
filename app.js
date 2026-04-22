@@ -1,9 +1,9 @@
-/* Mobile grade tracker — vanilla JS, saves to localStorage. */
+/* Mobile remote-access launcher — vanilla JS, saves to localStorage. */
 (() => {
   'use strict';
 
   // ---------- Storage ----------
-  const K = { courses: 'gt_courses', theme: 'gt_theme', lastCourse: 'gt_last' };
+  const K = { devices: 'ra_devices', theme: 'ra_theme', lastDevice: 'ra_last' };
   const load = (k, fb) => {
     try { const v = localStorage.getItem(k); return v == null ? fb : JSON.parse(v); }
     catch { return fb; }
@@ -25,416 +25,341 @@
     applyTheme(theme); save(K.theme, theme);
   });
 
-  // ---------- Data model ----------
-  // Course: { id, name, finalWeight (0-100), targetGrade (0-100), assignments: [
-  //   { id, name, earned, total, weight (0-100, optional) }
-  // ] }
-  let courses = load(K.courses, []);
-  if (!Array.isArray(courses)) courses = [];
-
-  const persist = () => save(K.courses, courses);
-
-  // Grade math. Returns { pct, weightUsed } or null if nothing graded yet.
-  // If any assignment has a user-set weight, we use weighted mode: sum(pct*w)/sum(w).
-  // Otherwise points mode: sum(earned)/sum(total)*100.
-  const computeCurrentGrade = (course) => {
-    const as = (course.assignments || []).filter(a =>
-      isFinite(+a.earned) && isFinite(+a.total) && +a.total > 0
-    );
-    if (!as.length) return null;
-    const anyWeighted = as.some(a => a.weight !== '' && a.weight != null && isFinite(+a.weight) && +a.weight > 0);
-    if (anyWeighted) {
-      let sumWP = 0, sumW = 0;
-      for (const a of as) {
-        const w = (a.weight !== '' && a.weight != null && isFinite(+a.weight)) ? +a.weight : 0;
-        if (w <= 0) continue;
-        const pct = (+a.earned / +a.total) * 100;
-        sumWP += pct * w; sumW += w;
-      }
-      if (sumW <= 0) return null;
-      return { pct: sumWP / sumW, weightUsed: sumW };
-    } else {
-      let e = 0, t = 0;
-      for (const a of as) { e += +a.earned; t += +a.total; }
-      if (t <= 0) return null;
-      return { pct: (e / t) * 100, weightUsed: null };
-    }
+  // ---------- Model ----------
+  // Device: { id, name, host, user, sshPort, rdpPort, webPort, notes,
+  //           commands: [{ id, name, body }] }
+  const DEFAULT_DEVICE = {
+    name: 'Desktop',
+    host: 'desktop-8r8o6du.tail82cb28.ts.net',
+    user: '',
+    sshPort: 22,
+    rdpPort: 3389,
+    webPort: 80,
+    notes: '',
+    commands: [],
   };
 
-  const letterOf = (pct) => {
-    if (pct == null || !isFinite(pct)) return '';
-    if (pct >= 93) return 'A';
-    if (pct >= 90) return 'A-';
-    if (pct >= 87) return 'B+';
-    if (pct >= 83) return 'B';
-    if (pct >= 80) return 'B-';
-    if (pct >= 77) return 'C+';
-    if (pct >= 73) return 'C';
-    if (pct >= 70) return 'C-';
-    if (pct >= 67) return 'D+';
-    if (pct >= 63) return 'D';
-    if (pct >= 60) return 'D-';
-    return 'F';
-  };
-
-  // Standard US 4.0 unweighted scale
-  const gpaOf = (pct) => {
-    if (pct == null || !isFinite(pct)) return null;
-    if (pct >= 93) return 4.0;
-    if (pct >= 90) return 3.7;
-    if (pct >= 87) return 3.3;
-    if (pct >= 83) return 3.0;
-    if (pct >= 80) return 2.7;
-    if (pct >= 77) return 2.3;
-    if (pct >= 73) return 2.0;
-    if (pct >= 70) return 1.7;
-    if (pct >= 67) return 1.3;
-    if (pct >= 63) return 1.0;
-    if (pct >= 60) return 0.7;
-    return 0.0;
-  };
-
-  const fmtPct = (n) => (n == null || !isFinite(n)) ? '—' : `${n.toFixed(1)}%`;
+  let devices = load(K.devices, null);
+  if (!Array.isArray(devices)) {
+    devices = [{ id: uid(), ...DEFAULT_DEVICE }];
+    save(K.devices, devices);
+  }
+  const persist = () => save(K.devices, devices);
 
   // ---------- Views ----------
   const homeView = document.getElementById('homeView');
-  const courseView = document.getElementById('courseView');
+  const deviceView = document.getElementById('deviceView');
   const backBtn = document.getElementById('backBtn');
   const appTitle = document.getElementById('appTitle');
   const appSubtitle = document.getElementById('appSubtitle');
 
-  let currentCourseId = null;
+  let currentId = null;
+  const current = () => devices.find(d => d.id === currentId);
 
   const showHome = () => {
-    currentCourseId = null;
-    save(K.lastCourse, null);
+    currentId = null;
+    save(K.lastDevice, null);
     homeView.classList.remove('hidden');
-    courseView.classList.add('hidden');
+    deviceView.classList.add('hidden');
     backBtn.classList.add('hidden');
-    appTitle.textContent = 'Grades';
-    appSubtitle.textContent = courses.length
-      ? 'Tap a class to edit · finals ready'
-      : 'Add your classes to get started';
+    appTitle.textContent = 'Remote';
+    appSubtitle.textContent = devices.length
+      ? 'Tap a device to connect'
+      : 'Add a device below to get started';
     renderHome();
   };
 
-  const showCourse = (id) => {
-    const c = courses.find(x => x.id === id);
-    if (!c) return showHome();
-    currentCourseId = id;
-    save(K.lastCourse, id);
+  const showDevice = (id) => {
+    const d = devices.find(x => x.id === id);
+    if (!d) return showHome();
+    currentId = id;
+    save(K.lastDevice, id);
     homeView.classList.add('hidden');
-    courseView.classList.remove('hidden');
+    deviceView.classList.remove('hidden');
     backBtn.classList.remove('hidden');
-    appTitle.textContent = c.name || 'Class';
-    appSubtitle.textContent = 'Add assignments and see your grade live';
-    renderCourse();
+    appTitle.textContent = d.name || d.host || 'Device';
+    appSubtitle.textContent = d.host || '';
+    renderDevice();
   };
 
   backBtn.addEventListener('click', showHome);
 
   // ---------- Home render ----------
-  const courseListEl = document.getElementById('courseList');
-  const overallAvgEl = document.getElementById('overallAvg');
-  const overallGpaEl = document.getElementById('overallGpa');
-  const courseCountEl = document.getElementById('courseCount');
-  const addCourseForm = document.getElementById('addCourseForm');
-  const addCourseInput = document.getElementById('addCourseInput');
+  const deviceListEl = document.getElementById('deviceList');
+  const addDeviceForm = document.getElementById('addDeviceForm');
+  const addDeviceInput = document.getElementById('addDeviceInput');
+
+  const deviceDisplayName = (d) =>
+    d.name || (d.host ? d.host.split('.')[0] : 'Untitled device');
 
   const renderHome = () => {
-    courseListEl.innerHTML = '';
-    courseCountEl.textContent = String(courses.length);
+    deviceListEl.innerHTML = '';
 
-    let gpaSum = 0, gpaN = 0, pctSum = 0, pctN = 0;
-
-    if (!courses.length) {
+    if (!devices.length) {
       const empty = document.createElement('li');
       empty.className = 'empty-card card';
       empty.innerHTML = `
-        <div class="empty-title">No classes yet</div>
-        <div class="muted small">Add your first class below — we'll track assignments and tell you exactly what you need on the final.</div>
+        <div class="empty-title">No devices yet</div>
+        <div class="muted small">Add the Tailscale hostname of a device (like <code>my-pc.tailXXXX.ts.net</code>) to get one-tap SSH / RDP shortcuts.</div>
       `;
-      courseListEl.appendChild(empty);
-    } else {
-      courses.forEach(c => {
-        const res = computeCurrentGrade(c);
-        const pct = res ? res.pct : null;
-        const letter = letterOf(pct);
-        const g = gpaOf(pct);
-        if (pct != null) { pctSum += pct; pctN++; }
-        if (g != null) { gpaSum += g; gpaN++; }
-
-        const needed = computeNeededFinal(c, pct);
-
-        const li = document.createElement('li');
-        li.className = 'course-card card';
-        li.innerHTML = `
-          <div class="course-main">
-            <div class="course-name">${escapeHtml(c.name || 'Untitled class')}</div>
-            <div class="course-meta muted small">
-              ${(c.assignments || []).length} assignment${(c.assignments || []).length === 1 ? '' : 's'}
-              ${c.finalWeight ? ` · final ${c.finalWeight}%` : ''}
-            </div>
-          </div>
-          <div class="course-side">
-            <div class="course-pct">${fmtPct(pct)}</div>
-            <div class="letter-pill ${letterClass(letter)}">${letter || '—'}</div>
-          </div>
-          ${needed != null ? `<div class="course-needed">
-            Need <strong>${needed.toFixed(1)}%</strong> on final for ${c.targetGrade}%
-          </div>` : ''}
-        `;
-        li.addEventListener('click', () => showCourse(c.id));
-        courseListEl.appendChild(li);
-      });
+      deviceListEl.appendChild(empty);
+      return;
     }
 
-    overallAvgEl.textContent = pctN ? `${(pctSum / pctN).toFixed(1)}%` : '—';
-    overallGpaEl.textContent = gpaN ? (gpaSum / gpaN).toFixed(2) : '—';
-  };
-
-  addCourseForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const name = addCourseInput.value.trim();
-    if (!name) return;
-    const c = {
-      id: uid(),
-      name,
-      finalWeight: 20,
-      targetGrade: 90,
-      assignments: [],
-    };
-    courses.push(c);
-    persist();
-    addCourseInput.value = '';
-    showCourse(c.id);
-  });
-
-  // ---------- Course render ----------
-  const courseNameInput = document.getElementById('courseName');
-  const currentGradeEl = document.getElementById('currentGrade');
-  const currentLetterEl = document.getElementById('currentLetter');
-  const deleteCourseBtn = document.getElementById('deleteCourseBtn');
-  const finalWeightInput = document.getElementById('finalWeight');
-  const targetGradeInput = document.getElementById('targetGrade');
-  const finalResultEl = document.getElementById('finalResult');
-  const assignmentListEl = document.getElementById('assignmentList');
-  const weightSumEl = document.getElementById('weightSum');
-  const addAssignmentForm = document.getElementById('addAssignmentForm');
-
-  const current = () => courses.find(c => c.id === currentCourseId);
-
-  // Given current non-final grade (0-100) and a course, what % do they need on the final?
-  // Formula: target = current*(1 - fw/100) + final*(fw/100)  =>
-  //          final = (target - current*(1 - fw/100)) / (fw/100)
-  const computeNeededFinal = (course, currentPct) => {
-    const fw = +course.finalWeight;
-    const target = +course.targetGrade;
-    if (!isFinite(fw) || fw <= 0 || fw > 100) return null;
-    if (!isFinite(target)) return null;
-    if (currentPct == null || !isFinite(currentPct)) return null;
-    const frac = fw / 100;
-    return (target - currentPct * (1 - frac)) / frac;
-  };
-
-  const renderCourse = () => {
-    const c = current();
-    if (!c) return showHome();
-
-    courseNameInput.value = c.name || '';
-    finalWeightInput.value = c.finalWeight ?? '';
-    targetGradeInput.value = c.targetGrade ?? '';
-
-    const res = computeCurrentGrade(c);
-    const pct = res ? res.pct : null;
-    currentGradeEl.textContent = fmtPct(pct);
-    const letter = letterOf(pct);
-    currentLetterEl.textContent = letter;
-    currentLetterEl.className = `letter-pill ${letterClass(letter)}`;
-
-    // Weights sum
-    const as = c.assignments || [];
-    const wSum = as.reduce((s, a) => {
-      const w = (a.weight !== '' && a.weight != null && isFinite(+a.weight)) ? +a.weight : 0;
-      return s + w;
-    }, 0);
-    const fw = isFinite(+c.finalWeight) ? +c.finalWeight : 0;
-    const nonFinalBudget = Math.max(0, 100 - fw);
-    weightSumEl.textContent = wSum > 0
-      ? `Weights: ${wSum}% of ${nonFinalBudget}%`
-      : `Weights: points-based`;
-    weightSumEl.classList.toggle('warn', wSum > nonFinalBudget + 0.01);
-
-    // Final exam calculator output
-    renderFinalResult(c, pct);
-
-    // Assignments list
-    assignmentListEl.innerHTML = '';
-    if (!as.length) {
+    devices.forEach(d => {
       const li = document.createElement('li');
-      li.className = 'empty';
-      li.textContent = 'No assignments yet. Add one below ↓';
-      assignmentListEl.appendChild(li);
-    } else {
-      as.forEach((a) => {
-        const pctA = (isFinite(+a.earned) && isFinite(+a.total) && +a.total > 0)
-          ? (+a.earned / +a.total) * 100 : null;
-        const li = document.createElement('li');
-        li.className = 'assignment-item';
-        li.innerHTML = `
-          <div class="a-row">
-            <input class="a-name" type="text" data-k="name" value="${escapeAttr(a.name || '')}" placeholder="Name" />
-            <button class="delete-btn" aria-label="Delete">×</button>
-          </div>
-          <div class="a-row a-row-2">
-            <input class="a-num" type="number" inputmode="decimal" step="0.01" data-k="earned" value="${a.earned ?? ''}" placeholder="Earned" />
-            <span class="slash">/</span>
-            <input class="a-num" type="number" inputmode="decimal" step="0.01" data-k="total" value="${a.total ?? ''}" placeholder="Total" />
-            <input class="a-num" type="number" inputmode="decimal" step="0.1" min="0" max="100" data-k="weight" value="${a.weight ?? ''}" placeholder="Wt %" />
-            <span class="a-pct">${pctA == null ? '—' : pctA.toFixed(1) + '%'}</span>
-          </div>
-        `;
-        // Wire up inputs
-        li.querySelectorAll('input[data-k]').forEach(inp => {
-          inp.addEventListener('input', () => {
-            const k = inp.dataset.k;
-            let v = inp.value;
-            if (k !== 'name') v = v === '' ? '' : +v;
-            a[k] = v;
-            persist();
-            renderCourseLite();
-          });
-        });
-        li.querySelector('.delete-btn').addEventListener('click', () => {
-          c.assignments = c.assignments.filter(x => x.id !== a.id);
-          persist();
-          renderCourse();
-        });
-        assignmentListEl.appendChild(li);
-      });
-    }
-  };
-
-  // Lighter rerender that doesn't blow away focused inputs in the assignments list.
-  const renderCourseLite = () => {
-    const c = current();
-    if (!c) return;
-    const res = computeCurrentGrade(c);
-    const pct = res ? res.pct : null;
-    currentGradeEl.textContent = fmtPct(pct);
-    const letter = letterOf(pct);
-    currentLetterEl.textContent = letter;
-    currentLetterEl.className = `letter-pill ${letterClass(letter)}`;
-
-    // Update per-row pct labels
-    const items = assignmentListEl.querySelectorAll('.assignment-item');
-    (c.assignments || []).forEach((a, i) => {
-      const el = items[i]?.querySelector('.a-pct');
-      if (!el) return;
-      const pctA = (isFinite(+a.earned) && isFinite(+a.total) && +a.total > 0)
-        ? (+a.earned / +a.total) * 100 : null;
-      el.textContent = pctA == null ? '—' : pctA.toFixed(1) + '%';
+      li.className = 'device-card card';
+      const shortHost = d.host ? d.host.split('.')[0] : '—';
+      li.innerHTML = `
+        <div class="device-main">
+          <div class="device-name">${escapeHtml(deviceDisplayName(d))}</div>
+          <div class="device-host muted small">${escapeHtml(d.host || 'no hostname set')}</div>
+        </div>
+        <div class="device-side">
+          <div class="device-badge">${escapeHtml(shortHost)}</div>
+        </div>
+      `;
+      li.addEventListener('click', () => showDevice(d.id));
+      deviceListEl.appendChild(li);
     });
-
-    const wSum = (c.assignments || []).reduce((s, a) => {
-      const w = (a.weight !== '' && a.weight != null && isFinite(+a.weight)) ? +a.weight : 0;
-      return s + w;
-    }, 0);
-    const fw = isFinite(+c.finalWeight) ? +c.finalWeight : 0;
-    const nonFinalBudget = Math.max(0, 100 - fw);
-    weightSumEl.textContent = wSum > 0
-      ? `Weights: ${wSum}% of ${nonFinalBudget}%`
-      : `Weights: points-based`;
-    weightSumEl.classList.toggle('warn', wSum > nonFinalBudget + 0.01);
-
-    renderFinalResult(c, pct);
   };
 
-  const renderFinalResult = (c, pct) => {
-    const fw = +c.finalWeight;
-    if (!isFinite(fw) || fw <= 0) {
-      finalResultEl.textContent = 'Set a final weight above 0% to see what you need.';
-      finalResultEl.className = 'final-result';
-      return;
-    }
-    if (pct == null) {
-      finalResultEl.textContent = 'Add a graded assignment to get a final-exam estimate.';
-      finalResultEl.className = 'final-result';
-      return;
-    }
-    const needed = computeNeededFinal(c, pct);
-    if (needed == null) {
-      finalResultEl.textContent = 'Need a target grade to compute.';
-      finalResultEl.className = 'final-result';
-      return;
-    }
+  addDeviceForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const raw = addDeviceInput.value.trim();
+    if (!raw) return;
+    const host = raw.replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+    const d = {
+      id: uid(),
+      name: host.split('.')[0] || 'Device',
+      host,
+      user: '',
+      sshPort: 22,
+      rdpPort: 3389,
+      webPort: 80,
+      notes: '',
+      commands: [],
+    };
+    devices.push(d);
+    persist();
+    addDeviceInput.value = '';
+    showDevice(d.id);
+  });
 
-    const target = +c.targetGrade;
-    let tone = '';
-    let msg = '';
-    if (needed > 100) {
-      tone = 'bad';
-      const maxPossible = pct * (1 - fw / 100) + 100 * (fw / 100);
-      msg = `Need <strong>${needed.toFixed(1)}%</strong> on the final to hit ${target}% — not mathematically possible. Best case with 100% on final: <strong>${maxPossible.toFixed(1)}%</strong>.`;
-    } else if (needed <= 0) {
-      tone = 'good';
-      msg = `You're already above ${target}%. A <strong>0%</strong> on the final still lands you at <strong>${(pct * (1 - fw / 100)).toFixed(1)}%</strong>.`;
-    } else {
-      tone = needed >= 90 ? 'warn' : needed >= 70 ? 'ok' : 'good';
-      msg = `Need <strong>${needed.toFixed(1)}%</strong> on the final to get <strong>${target}%</strong> in the class.`;
-    }
-    finalResultEl.className = `final-result ${tone}`;
-    finalResultEl.innerHTML = msg;
+  // ---------- Device render ----------
+  const dName = document.getElementById('dName');
+  const dHost = document.getElementById('dHost');
+  const dUser = document.getElementById('dUser');
+  const dSshPort = document.getElementById('dSshPort');
+  const dRdpPort = document.getElementById('dRdpPort');
+  const dWebPort = document.getElementById('dWebPort');
+  const dNotes = document.getElementById('dNotes');
+  const deleteDeviceBtn = document.getElementById('deleteDeviceBtn');
+  const sshBtn = document.getElementById('sshBtn');
+  const rdpBtn = document.getElementById('rdpBtn');
+  const copyBtn = document.getElementById('copyBtn');
+  const webBtn = document.getElementById('webBtn');
+  const sshSub = document.getElementById('sshSub');
+  const rdpSub = document.getElementById('rdpSub');
+  const copySub = document.getElementById('copySub');
+  const webSub = document.getElementById('webSub');
+  const cmdList = document.getElementById('cmdList');
+  const cmdCount = document.getElementById('cmdCount');
+  const addCmdForm = document.getElementById('addCmdForm');
+  const cmdName = document.getElementById('cmdName');
+  const cmdBody = document.getElementById('cmdBody');
+
+  const renderDevice = () => {
+    const d = current();
+    if (!d) return showHome();
+    dName.value = d.name || '';
+    dHost.value = d.host || '';
+    dUser.value = d.user || '';
+    dSshPort.value = d.sshPort ?? '';
+    dRdpPort.value = d.rdpPort ?? '';
+    dWebPort.value = d.webPort ?? '';
+    dNotes.value = d.notes || '';
+    renderSubs();
+    renderCommands();
   };
 
-  courseNameInput.addEventListener('input', () => {
-    const c = current(); if (!c) return;
-    c.name = courseNameInput.value;
-    persist();
-    appTitle.textContent = c.name || 'Class';
-  });
-  finalWeightInput.addEventListener('input', () => {
-    const c = current(); if (!c) return;
-    c.finalWeight = finalWeightInput.value === '' ? '' : +finalWeightInput.value;
-    persist();
-    renderCourseLite();
-  });
-  targetGradeInput.addEventListener('input', () => {
-    const c = current(); if (!c) return;
-    c.targetGrade = targetGradeInput.value === '' ? '' : +targetGradeInput.value;
-    persist();
-    renderCourseLite();
-  });
+  const renderSubs = () => {
+    const d = current(); if (!d) return;
+    const user = (d.user || '').trim();
+    const host = (d.host || '').trim();
+    const sshPort = +d.sshPort || 22;
+    const rdpPort = +d.rdpPort || 3389;
+    const webPort = +d.webPort || 80;
+    sshSub.textContent = host ? `${user ? user + '@' : ''}${host}${sshPort !== 22 ? ':' + sshPort : ''}` : 'set hostname';
+    rdpSub.textContent = host ? `${host}${rdpPort !== 3389 ? ':' + rdpPort : ''}` : 'set hostname';
+    copySub.textContent = host ? `ssh ${user ? user + '@' : ''}${host}` : 'set hostname';
+    webSub.textContent = host ? `http://${host}${webPort !== 80 ? ':' + webPort : ''}` : 'set hostname';
+  };
 
-  deleteCourseBtn.addEventListener('click', () => {
-    const c = current(); if (!c) return;
-    const ok = confirm(`Delete "${c.name || 'this class'}" and all its assignments?`);
+  const bindField = (el, key, coerce = (v) => v) => {
+    el.addEventListener('input', () => {
+      const d = current(); if (!d) return;
+      d[key] = coerce(el.value);
+      persist();
+      if (key === 'name' || key === 'host') {
+        appTitle.textContent = d.name || (d.host ? d.host.split('.')[0] : 'Device');
+        if (key === 'host') appSubtitle.textContent = d.host || '';
+      }
+      renderSubs();
+    });
+  };
+  const numOrBlank = (v) => v === '' ? '' : (+v);
+  bindField(dName, 'name');
+  bindField(dHost, 'host', v => v.trim());
+  bindField(dUser, 'user', v => v.trim());
+  bindField(dSshPort, 'sshPort', numOrBlank);
+  bindField(dRdpPort, 'rdpPort', numOrBlank);
+  bindField(dWebPort, 'webPort', numOrBlank);
+  bindField(dNotes, 'notes');
+
+  deleteDeviceBtn.addEventListener('click', () => {
+    const d = current(); if (!d) return;
+    const ok = confirm(`Delete "${deviceDisplayName(d)}"?`);
     if (!ok) return;
-    courses = courses.filter(x => x.id !== c.id);
+    devices = devices.filter(x => x.id !== d.id);
     persist();
     showHome();
   });
 
-  addAssignmentForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const c = current(); if (!c) return;
-    const name = document.getElementById('aName').value.trim();
-    const earned = document.getElementById('aEarned').value;
-    const total = document.getElementById('aTotal').value;
-    const weight = document.getElementById('aWeight').value;
-    if (!name && earned === '' && total === '') return;
-    c.assignments = c.assignments || [];
-    c.assignments.push({
-      id: uid(),
-      name: name || 'Assignment',
-      earned: earned === '' ? '' : +earned,
-      total: total === '' ? '' : +total,
-      weight: weight === '' ? '' : +weight,
-    });
-    persist();
-    addAssignmentForm.reset();
-    renderCourse();
+  // ---------- Launch actions ----------
+  const missingHost = (d) => {
+    if (!d.host) { toast('Set a hostname first'); return true; }
+    return false;
+  };
+
+  sshBtn.addEventListener('click', () => {
+    const d = current(); if (!d || missingHost(d)) return;
+    const user = (d.user || '').trim();
+    const port = +d.sshPort || 22;
+    // Termius and Blink both register ssh:// — send user, host, and port.
+    const url = `ssh://${user ? encodeURIComponent(user) + '@' : ''}${d.host}${port !== 22 ? ':' + port : ''}`;
+    launchScheme(url, 'SSH app');
   });
+
+  rdpBtn.addEventListener('click', () => {
+    const d = current(); if (!d || missingHost(d)) return;
+    const port = +d.rdpPort || 3389;
+    const user = (d.user || '').trim();
+    // Microsoft Remote Desktop (iOS/Android) supports rdp:// URLs with
+    // .rdp-style key=value fields, URL-encoded.
+    const parts = [
+      `full%20address=s:${encodeURIComponent(d.host + ':' + port)}`,
+    ];
+    if (user) parts.push(`username=s:${encodeURIComponent(user)}`);
+    const url = `rdp://${parts.join('&')}`;
+    launchScheme(url, 'Remote Desktop');
+  });
+
+  copyBtn.addEventListener('click', async () => {
+    const d = current(); if (!d || missingHost(d)) return;
+    const user = (d.user || '').trim();
+    const port = +d.sshPort || 22;
+    const cmd = `ssh ${user ? user + '@' : ''}${d.host}${port !== 22 ? ' -p ' + port : ''}`;
+    await copyToClipboard(cmd);
+    toast('Copied: ' + cmd);
+  });
+
+  webBtn.addEventListener('click', () => {
+    const d = current(); if (!d || missingHost(d)) return;
+    const port = +d.webPort || 80;
+    const url = `http://${d.host}${port !== 80 ? ':' + port : ''}/`;
+    window.open(url, '_blank', 'noopener');
+  });
+
+  const launchScheme = (url, label) => {
+    // Track whether we end up backgrounded. If the scheme resolves, iOS/Android
+    // hands off to the app and we lose focus. Otherwise, show a tip.
+    let left = false;
+    const onHide = () => { left = true; };
+    document.addEventListener('visibilitychange', onHide, { once: true });
+    window.location.href = url;
+    setTimeout(() => {
+      document.removeEventListener('visibilitychange', onHide);
+      if (!left && document.visibilityState === 'visible') {
+        toast(`No ${label} installed — install one and try again`);
+      }
+    }, 1800);
+  };
+
+  const copyToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Fallback for older browsers / non-HTTPS contexts
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch {}
+      document.body.removeChild(ta);
+    }
+  };
+
+  // ---------- Saved commands ----------
+  const renderCommands = () => {
+    const d = current(); if (!d) return;
+    cmdList.innerHTML = '';
+    cmdCount.textContent = String((d.commands || []).length);
+    if (!d.commands?.length) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = 'No saved commands yet.';
+      cmdList.appendChild(li);
+      return;
+    }
+    d.commands.forEach(c => {
+      const li = document.createElement('li');
+      li.className = 'cmd-item';
+      li.innerHTML = `
+        <div class="cmd-main">
+          <div class="cmd-name">${escapeHtml(c.name || 'command')}</div>
+          <div class="cmd-body muted small">${escapeHtml(c.body || '')}</div>
+        </div>
+        <button class="delete-btn" aria-label="Delete">×</button>
+      `;
+      li.querySelector('.cmd-main').addEventListener('click', async () => {
+        await copyToClipboard(c.body || '');
+        toast('Copied');
+      });
+      li.querySelector('.delete-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        d.commands = (d.commands || []).filter(x => x.id !== c.id);
+        persist();
+        renderCommands();
+      });
+      cmdList.appendChild(li);
+    });
+  };
+
+  addCmdForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const d = current(); if (!d) return;
+    const name = cmdName.value.trim();
+    const body = cmdBody.value.trim();
+    if (!body) return;
+    d.commands = d.commands || [];
+    d.commands.push({ id: uid(), name: name || body.slice(0, 24), body });
+    persist();
+    cmdName.value = ''; cmdBody.value = '';
+    renderCommands();
+  });
+
+  // ---------- Toast ----------
+  const toastEl = document.getElementById('toast');
+  let toastTimer;
+  const toast = (msg) => {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2200);
+  };
 
   // ---------- Utils ----------
   function escapeHtml(s) {
@@ -442,17 +367,11 @@
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[c]));
   }
-  function escapeAttr(s) { return escapeHtml(s); }
-  function letterClass(letter) {
-    if (!letter) return '';
-    const first = letter[0];
-    return `l-${first.toLowerCase()}`;
-  }
 
   // ---------- Boot ----------
-  const lastId = load(K.lastCourse, null);
-  if (lastId && courses.some(c => c.id === lastId)) {
-    showCourse(lastId);
+  const lastId = load(K.lastDevice, null);
+  if (lastId && devices.some(d => d.id === lastId)) {
+    showDevice(lastId);
   } else {
     showHome();
   }

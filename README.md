@@ -1,73 +1,67 @@
-# Grades
+# Remote
 
-A mobile grade tracker you can install on your phone's home screen. Built for finals week: add your classes, punch in assignments, and see exactly what you need on the final to hit your target grade.
+A mobile launcher for your Tailscale devices. One tap to SSH or RDP into a machine, installable to your phone's home screen as a PWA.
 
 ## What it does
 
-- **Per-class grades** — add assignments with earned / total points, optional weight %.
-- **Live weighted average** — shows your current grade + letter, updates as you type.
-- **Final exam calculator** — "you need **87.3%** on the final to get **90%** in this class."
-- **Overall GPA (4.0 scale)** on the home screen across all classes.
-- **Works offline** (service worker cache), installs as a PWA.
-- **100% local** — all data stays in `localStorage` on your device. No account.
+- **Device list** you manage on your phone — add any Tailscale hostname.
+- **One-tap launch:**
+  - **SSH** — opens `ssh://user@host:port` (handled by Termius or Blink Shell on iOS, Termius on Android).
+  - **RDP** — opens an `rdp://` URL that the Microsoft Remote Desktop app consumes directly.
+  - **Copy** — copies the equivalent `ssh` one-liner to the clipboard as a fallback.
+  - **Web** — opens `http://host:port` in the browser (Plex, Home Assistant, NAS, whatever).
+- **Saved commands** per device — label + command body, tap to copy.
+- **Works offline**, installable as a PWA, **100% local** (all data in `localStorage`).
+
+## Prereqs
+
+1. **Tailscale** installed and signed in on your phone and each device you want to reach.
+2. On each target device, the matching service running:
+   - SSH → OpenSSH Server (Linux has it; on Windows install via `Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0`).
+   - RDP → Windows Pro/Enterprise/Education with Remote Desktop enabled (Settings → System → Remote Desktop).
+3. On the phone, install the launching apps:
+   - SSH: [**Termius**](https://apps.apple.com/app/termius/id549039908) (free) or [**Blink Shell**](https://apps.apple.com/app/blink-shell-code-editor/id1594898306) (paid, excellent).
+   - RDP: [**Microsoft Remote Desktop**](https://apps.apple.com/app/microsoft-remote-desktop/id714464092) (free, official).
 
 ## Get it on your phone
 
-You need to serve the files over HTTPS (or `http://localhost`) for the service worker and "add to home screen" to work. Two easy options:
+Serve the files over HTTPS so the service worker and "Add to Home Screen" work.
 
-### Option A — GitHub Pages (recommended, free)
+### GitHub Pages (recommended)
 
-1. Push this repo to GitHub.
-2. In the repo, go to **Settings → Pages**, set **Source** to this branch and the root `/` folder.
-3. Wait ~1 minute. GitHub will give you a URL like `https://<you>.github.io/<repo>/`.
-4. Open that URL on your phone.
-5. Add to home screen:
-   - **iPhone (Safari):** Share → *Add to Home Screen*.
-   - **Android (Chrome):** ⋮ menu → *Install app* / *Add to Home screen*.
+1. Push this branch.
+2. Repo → Settings → Pages → set **Source** to this branch, root `/`.
+3. Open the resulting `https://<you>.github.io/<repo>/` URL on your phone.
+4. iPhone Safari: Share → *Add to Home Screen*. Android Chrome: ⋮ → *Install app*.
 
-### Option B — Serve locally on your Wi-Fi
-
-From this directory:
+### Local over Wi-Fi
 
 ```sh
 python3 -m http.server 8000
-# or
-npx --yes serve -l 8000 .
 ```
 
-Find your computer's LAN IP (e.g. `192.168.1.42`) and on your phone open `http://192.168.1.42:8000`. For an HTTPS tunnel so PWA install works, try `npx --yes localtunnel --port 8000`.
+Find your computer's LAN IP and on your phone open `http://192.168.x.y:8000`. For PWA install over HTTPS: `npx --yes localtunnel --port 8000`.
 
-## How the grade math works
+## How the launch URLs work
 
-Each assignment has **earned / total** points and an optional **weight %**.
+- **SSH** → `ssh://user@hostname:port` — iOS and Android SSH clients register this scheme.
+- **RDP** → `rdp://full%20address=s:host:3389&username=s:user` — Microsoft Remote Desktop accepts the same key/value pairs as an `.rdp` file, URL-encoded.
+- **Web** → regular `http://host:port/`.
+- **Copy** → writes `ssh [user@]host [-p port]` to the clipboard via the Clipboard API (fallback: hidden textarea + `execCommand('copy')`).
 
-- If you set a **weight** on any assignment, the class grade is a **weighted average**: `sum(pct × weight) / sum(weight)`. Typical setup: Homework 20%, Quizzes 20%, Midterm 20%, Final 40% — add each as a single "assignment" with that weight, or add individual items whose weights sum to the category total.
-- If **no assignment has a weight**, the class grade is **point-based**: `sum(earned) / sum(total) × 100`.
-- The **final exam calculator** assumes the final is separate. It uses your current non-final grade and the final's weight to compute what you need on the final to hit your target:
-  - `needed_on_final = (target − current × (1 − finalWeight)) / finalWeight`
-  - So the assignments you enter should be **everything except the final** — don't add the final itself as an assignment.
-
-Tip: the "Weights: X% of Y%" indicator shows how much of the non-final grade you've assigned, so you know whether your weights are set up correctly.
+If no compatible app is installed, the OS leaves the browser open and the app shows a toast telling you which app to install.
 
 ## File layout
 
 ```
-index.html              app shell (home + course detail)
+index.html              app shell (device list + device detail)
 styles.css              styles (dark + light)
-app.js                  all logic (courses, grades, final calc)
+app.js                  all logic (devices, launchers, commands)
 manifest.webmanifest    PWA manifest
 sw.js                   service worker (offline cache)
 icons/                  home-screen icons
 ```
 
-## Customising
-
-- **Add a class:** type its name in the box on the home screen, hit +.
-- **Edit a class:** tap it. Rename by typing in the name field. Set final weight and target grade at the top of the card.
-- **Add assignments:** name, earned, total, and optional weight %. Tap × to delete.
-- **Theme:** moon icon, top right.
-- **Reset:** clear site data in your browser settings (wipes all local data).
-
 ## Privacy
 
-Nothing leaves your device. There is no backend, no analytics, no network calls.
+No network calls. No accounts. No telemetry. Every device and saved command stays in your browser's `localStorage`.
