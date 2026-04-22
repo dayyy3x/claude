@@ -87,7 +87,7 @@
     homeView.classList.remove('hidden');
     deviceView.classList.add('hidden');
     backBtn.classList.add('hidden');
-    appTitle.textContent = 'Remote';
+    appTitle.innerHTML = 'Remote <span class="ver-badge">v2</span>';
     appSubtitle.textContent = devices.length
       ? 'Tap a device to connect'
       : 'Add a device below to get started';

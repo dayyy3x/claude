@@ -65,6 +65,16 @@ body {
   -webkit-background-clip: text; background-clip: text; color: transparent;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.ver-badge {
+  display: inline-block;
+  font-size: 10px; font-weight: 700;
+  padding: 2px 6px; border-radius: 999px;
+  background: rgba(124, 156, 255, 0.18);
+  color: var(--accent);
+  vertical-alignment: middle;
+  margin-left: 4px;
+  -webkit-text-fill-color: var(--accent);
+}
 .icon-btn {
   background: var(--card); border: 1px solid var(--card-border);
   color: var(--text); width: 40px; height: 40px;
