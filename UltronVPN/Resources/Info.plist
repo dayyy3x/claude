@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key>
+    <string>Ultron</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$(MARKETING_VERSION)</string>
+    <key>CFBundleVersion</key>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+    <key>UIApplicationSupportsIndirectInputEvents</key>
+    <true/>
+    <key>UILaunchScreen</key>
+    <dict>
+        <key>UIColorName</key>
+        <string>LaunchBackground</string>
+    </dict>
+    <key>UIRequiredDeviceCapabilities</key>
+    <array>
+        <string>arm64</string>
+    </array>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>UIUserInterfaceStyle</key>
+    <string>Dark</string>
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>voip</string>
+    </array>
+    <key>NSCameraUsageDescription</key>
+    <string>Scan a WireGuard configuration QR code to import a tunnel.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Ultron pings peers on your tunnel to show live latency.</string>
+    <key>LSApplicationQueriesSchemes</key>
+    <array>
+        <string>moonlight</string>
+        <string>rdp</string>
+        <string>vnc</string>
+    </array>
+    <key>UIRequiresFullScreen</key>
+    <true/>
+</dict>
+</plist>
